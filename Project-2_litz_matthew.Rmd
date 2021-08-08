@@ -77,6 +77,39 @@ how did we pick threshhold
 
 
 
+exclude data with high values of red?
+
+PCA might me interesting
+
+
+Summary from last week:
+
+Caret
+        “Learned caret too late”
+        helpful due to CV capabilities
+        consistent interface for all methods
+        easy to get metrics
+Code execution
+        Running code in RStudio works, but knitting fails. This is due to results being left over from changed code (Clear your environment from time to time and rerun everything in RStudio)
+        Use caching to avoid recalculation (be careful if code chunks depend on previous results; consider caching only code chunks that take a long time)
+        Caret: with large number of tuning parameters, consider reducing the number of explored combinations using tunelength
+        caret: set allowParallel=TRUE
+Class imbalance
+        Reduce amount of non-tarp
+        FPR is pointless to look at
+Feature engineering
+        Interaction blue and green
+        Convert RGB to HSV colors
+        Location data would be a useful additional feature
+EDA learning points
+        blue well separated; expected KNN to work better
+        collinearity and brightness
+        duplicating blue tarp adds little value (problematic for KNN!)
+Threshold selection
+        improve model performance
+Penalized ridge logistic regression
+        lambda very small, therefore no need for ridge or lasso
+
 
 
 
@@ -92,17 +125,23 @@ attach(data)
 data = data %>% 
   mutate(BlueTarp = if_else(Class == "Blue Tarp", "yes", "no"))
 
-#ggplot(data, aes(x=factor(Class), y=Blue)) + 
-#  geom_boxplot(fill="blue", color="black") + 
-#  labs(x="Class", y="Blue")
 
-#ggplot(data, aes(x=factor(Class), y=Red)) + 
-#  geom_boxplot(fill="red", color="black") + 
-#  labs(x="Class", y="Red")
 
-#ggplot(data, aes(x=factor(Class), y=Green)) + 
-#  geom_boxplot(fill="green", color="black") + 
-#  labs(x="Class", y="Green")
+
+
+
+
+ggplot(data, aes(x=factor(Class), y=Blue)) + 
+  geom_boxplot(fill="blue", color="black") + 
+  labs(x="Class", y="Blue")
+
+ggplot(data, aes(x=factor(Class), y=Red)) + 
+  geom_boxplot(fill="red", color="black") + 
+  labs(x="Class", y="Red")
+
+ggplot(data, aes(x=factor(Class), y=Green)) + 
+  geom_boxplot(fill="green", color="black") + 
+  labs(x="Class", y="Green")
 
 
 #remove classification variables
@@ -112,6 +151,22 @@ df=subset(data, select = -c(Class))
 #df %>% ggpairs(upper=list(continuous=wrap("cor", size=3)))
 
 ```
+
+```{r}
+pareto_df <- data %>%
+  count(Class, sort = TRUE) 
+pareto_df
+
+
+ggplot(pareto_df, aes(x=reorder(Class,-n), y=n)) + 
+  geom_bar(stat = "identity") + 
+  labs(x="Class", y="Count")
+
+```
+
+
+
+
 
 
 # Model Training
@@ -406,21 +461,21 @@ The objective "binary:logistic logistic" was utilized for this classification pr
 
 
 #train and test matrices
-trainm <- sparse.model.matrix(Purchase ~.-1,data=caravan_train)
-train_label <- caravan_train[,"Purchase"]
+trainm <- sparse.model.matrix(BlueTarp ~.-1,data=train)
+train_label <- train$BlueTarp
 train_matrix <- xgb.DMatrix(data = as.matrix(trainm),label = train_label)
 
-testm <- sparse.model.matrix(Purchase ~.-1,data=caravan_test)
-test_label <- caravan_test[,"Purchase"]
+testm <- sparse.model.matrix(BlueTarp ~.-1,data=test)
+test_label <- test$BlueTarp
 test_matrix <- xgb.DMatrix(data = as.matrix(testm),label = test_label)
 
 #Parameters
 #nc <- length(unique(train_label))
-#xgb_params <- list("objective" = "reg:squarederror",
-                    #"eval_metric" = "mlogloss",
-                    #"num_class" = nc,
-#                    "learning_rate" = 0.01, #shrinkage
-#                    "num_parallel_tree"=1000)
+xgb_params <- list("objective" = "binary:logistic",
+                    "eval_metric" = "mlogloss",
+      #              "num_class" = nc,
+                    "learning_rate" = 0.01, #shrinkage
+                    "num_parallel_tree"=1000)
 
 #watchlist <- list(train = train_matrix, test = test_matrix)
 
@@ -439,8 +494,8 @@ test_matrix <- xgb.DMatrix(data = as.matrix(testm),label = test_label)
 
 
 #from docs api
-cv <- xgb.cv(data = train_matrix, nrounds = 10, nthread = 2, nfold = 5, metrics = list("rmse","auc"),
-                  max_depth = 3, eta = 1, objective = "binary:logistic")
+cv = xgb.cv(params = xgb_params, data = train_matrix, nrounds = 100, nthread = 2, nfold = 10, metrics = list("rmse","auc"),
+                  max_depth = 3, eta = 0.1)
 print(cv)
 print(cv, verbose=TRUE)
 
