@@ -92,24 +92,24 @@ attach(data)
 data = data %>% 
   mutate(BlueTarp = if_else(Class == "Blue Tarp", "yes", "no"))
 
-ggplot(data, aes(x=factor(Class), y=Blue)) + 
-  geom_boxplot(fill="blue", color="black") + 
-  labs(x="Class", y="Blue")
+#ggplot(data, aes(x=factor(Class), y=Blue)) + 
+#  geom_boxplot(fill="blue", color="black") + 
+#  labs(x="Class", y="Blue")
 
-ggplot(data, aes(x=factor(Class), y=Red)) + 
-  geom_boxplot(fill="red", color="black") + 
-  labs(x="Class", y="Red")
+#ggplot(data, aes(x=factor(Class), y=Red)) + 
+#  geom_boxplot(fill="red", color="black") + 
+#  labs(x="Class", y="Red")
 
-ggplot(data, aes(x=factor(Class), y=Green)) + 
-  geom_boxplot(fill="green", color="black") + 
-  labs(x="Class", y="Green")
+#ggplot(data, aes(x=factor(Class), y=Green)) + 
+#  geom_boxplot(fill="green", color="black") + 
+#  labs(x="Class", y="Green")
 
 
 #remove classification variables
 df=subset(data, select = -c(Class))
 
 #data distributions
-df %>% ggpairs(upper=list(continuous=wrap("cor", size=3)))
+#df %>% ggpairs(upper=list(continuous=wrap("cor", size=3)))
 
 ```
 
@@ -174,7 +174,7 @@ trControl = caret::trainControl(method="cv", number=10,
                                      classProbs = TRUE,
                                      allowParallel=TRUE)
 
-logitFit = train(fmla, data=df,
+logitFit = train(fmla, data=train,
                  method="glm",
                  family='binomial',  
                  trControl=trControl)
@@ -186,8 +186,15 @@ logit_pred = predict(logitFit, X.test, type="prob")
 #levels(logit_pred) = c('yes','no')
 
 #confusionMatrix(logit_pred, cm_truth)
+rocplot = function(pred,truth,...){
+predob = prediction(pred,truth)
+perf = performance(predob,"tpr","fpr")
+plot(perf)
+}
 
-rocplot(logit_pred[2], cm_truth, main ="Training Data ")
+rocplot(logit_pred[2], cm_truth, main ="Training Data")
+
+log_perf = performance(prediction(logit_pred[2],cm_truth),"tpr","fpr")
 
 ```
 
@@ -211,7 +218,7 @@ ldaFit = caret::train(BlueTarp ~ ., data=train,
 summary(ldaFit)
 
 #predict values and establish levels
-lda_pred = predict(ldaFit, newdata=X.test)$posterior[,'1']#, type="raw")
+#lda_pred = predict(ldaFit, newdata=X.test)$posterior[,'1']#, type="raw")
 
 #levels(lda_pred) = c('yes','no')
 
@@ -224,14 +231,10 @@ lda_pred = predict(ldaFit, newdata=X.test)$posterior[,'1']#, type="raw")
 
 #confusionMatrix(lda_pred, cm_truth)
 
-table(lda_pred,cm_truth)
+#table(lda_pred,cm_truth)
 
-summary(lda_pred)
+#summary(lda_pred)
 
-rocplot = function(pred,truth,...){
-predob = prediction(pred,truth)
-perf = performance(predob,"tpr","fpr")
-plot(perf,...)}
 
 
 #ldaFit$pred
@@ -252,15 +255,15 @@ plot(perf,...)}
 ```{r}
 
 
-ldaFit$pred
 
 lda_pred = predict(ldaFit, newdata=X.test, type="prob")
 lda_pred
 
 rocplot(lda_pred[2], cm_truth, main ="Training Data ")
-#roc.perf = prediction(lda_pred,cm_truth)
-#plot(roc.perf)
-#abline(a=0, b= 1)
+
+lda_perf = performance(prediction(lda_pred[2],cm_truth),"tpr","fpr")
+
+
 ```
 
 
@@ -301,7 +304,7 @@ qda_pred = predict(qdaFit, X.test, type="prob")
 #confusionMatrix(qda_pred, cm_truth)
 
 rocplot(qda_pred[2], cm_truth, main ="Training Data ")
-
+qda_perf = performance(prediction(qda_pred[2],cm_truth),"tpr","fpr")
 
 ```
 
@@ -331,6 +334,7 @@ knn_pred = predict(knnFit, X.test, type="prob")
 
 rocplot(knn_pred[2], cm_truth, main ="Training Data ")
 
+knn_perf = performance(prediction(knn_pred[2],cm_truth),"tpr","fpr")
 
 ```
 
@@ -351,7 +355,7 @@ trControl = caret::trainControl(method='cv',
 
 tuneGrid = expand.grid(lambda=lambdas, alpha=0)
 
-plrFit = caret::train(fmla, data=df,
+plrFit = caret::train(fmla, data=train,
                  method='glmnet',
                  family='binomial', 
                  thresh=0.74,       
@@ -369,7 +373,7 @@ plr_pred = predict(plrFit, X.test, type="prob")
 #confusionMatrix(plr_pred, cm_truth)
 
 rocplot(plr_pred[2], cm_truth, main ="Training Data ")
-performance(plr_pred[2],cm_truth,"tpr","fpr")
+plr_perf = performance(prediction(plr_pred[2],cm_truth),"tpr","fpr")
 
 ```
 
@@ -394,6 +398,9 @@ plot(ths$prob_threshold, ths$Accuracy)
 
 
 ### Random Forests with XGB 
+The objective "binary:logistic logistic" was utilized for this classification problem.
+
+
 
 ```{r random_forests, echo=TRUE}
 
@@ -408,27 +415,34 @@ test_label <- caravan_test[,"Purchase"]
 test_matrix <- xgb.DMatrix(data = as.matrix(testm),label = test_label)
 
 #Parameters
-nc <- length(unique(train_label))
-xgb_paramns <- list("objective" = "reg:squarederror",
+#nc <- length(unique(train_label))
+#xgb_params <- list("objective" = "reg:squarederror",
                     #"eval_metric" = "mlogloss",
                     #"num_class" = nc,
-                    "learning_rate" = 0.01, #shrinkage
-                    "num_parallel_tree"=1000)
+#                    "learning_rate" = 0.01, #shrinkage
+#                    "num_parallel_tree"=1000)
 
-watchlist <- list(train = train_matrix, test = test_matrix)
+#watchlist <- list(train = train_matrix, test = test_matrix)
 
 #xgb model
-bst_model <- xgb.train(params = xgb_paramns,
-                       data=train_matrix,
-                       nrounds = 100,
-                       watchlist = watchlist)
+#bst_model <- xgb.train(params = xgb_params,
+#                       data=train_matrix,
+#                       nrounds = 100,
+#                       watchlist = watchlist)
 
 
 
 #cv
-xgb_cv = cv(dtrain=data_dmatrix, params=params, nfold=3,
-                    num_boost_round=50, early_stopping_rounds=10, metrics="auc", as_pandas=True, seed=123)
+#xgb_cv = cv(dtrain=data_dmatrix, params=params, nfold=3,
+#                    num_boost_round=50, early_stopping_rounds=10, metrics="auc", as_pandas=True, seed=123)
 
+
+
+#from docs api
+cv <- xgb.cv(data = train_matrix, nrounds = 10, nthread = 2, nfold = 5, metrics = list("rmse","auc"),
+                  max_depth = 3, eta = 1, objective = "binary:logistic")
+print(cv)
+print(cv, verbose=TRUE)
 
 
 ```
@@ -438,6 +452,8 @@ xgb_cv = cv(dtrain=data_dmatrix, params=params, nfold=3,
 
 
 ### Support Vector Machines (SVM)
+Scaling was implemented on this data set
+
 
 ```{r svm, echo=TRUE}
 
@@ -461,6 +477,8 @@ svm_pred = predict(svmFit, X.test, type="prob")
 #confusionMatrix(knn_pred, cm_truth)
 
 rocplot(svm_pred[2], cm_truth, main ="Training Data ")
+svm_perf = performance(prediction(svm_pred[2],cm_truth),"tpr","fpr")
+
 
 ```
 
@@ -470,11 +488,15 @@ rocplot(svm_pred[2], cm_truth, main ="Training Data ")
 
 
 
-plot(log_perf, colorize = TRUE)
-plot(lda_perf, add=TRUE, colorize=TRUE)
-plot(qda_perf, add=TRUE, colorize=TRUE)
-plot(knn_perf, add=TRUE, colorize=TRUE)
-plot(plr_perf, add=TRUE, colorize=TRUE)
+plot(log_perf, legend = TRUE, title='log', col='red')
+plot(lda_perf, add=TRUE, legend = TRUE, title='log', col='blue')
+plot(qda_perf, add=TRUE, legend = TRUE, title='log', col='green')
+plot(knn_perf, add=TRUE, legend = TRUE, title='log', col='violet')
+plot(plr_perf, add=TRUE, legend = TRUE, title='log', col='orange')
+plot(svm_perf, add=TRUE, legend = TRUE, title='log', col='black')
+
+legend(0.8, 0.6, legend=c("Log", "LDA","QDA","KNN","PLR","SVM"),
+       col=c("red", "blue","green","violet","orange","black"), lty=1:6, cex=0.8)
 
 ```
 
