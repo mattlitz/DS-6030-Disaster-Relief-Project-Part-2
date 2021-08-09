@@ -147,9 +147,6 @@ ggplot(data, aes(x=factor(Class), y=Green)) +
 #remove classification variables
 df=subset(data, select = -c(Class))
 
-#data distributions
-#df %>% ggpairs(upper=list(continuous=wrap("cor", size=3)))
-
 ```
 
 ```{r}
@@ -164,6 +161,139 @@ ggplot(pareto_df, aes(x=reorder(Class,-n), y=n)) +
 
 ```
 
+
+
+
+# Data Reduction
+
+As the pareto charts shows, there is an imbalance of Blue Tarp data in the data set.  Therefore we must examine the distributions of RGB in the other classifications.
+
+Let's examine the top two datasets 
+
+
+Will it affect blue classification?
+
+need to split to maintain distributions
+
+
+```{r}
+library(reshape2)
+#need to mutate dataframe
+vegetation_df = data[data$Class=="Vegetation",]
+vegetation_df=subset(vegetation_df, select = -c(Class,BlueTarp))
+vegetation_df=as_tibble(melt(vegetation_df))
+
+soil_df = data[data$Class=="Soil",]
+soil_df=subset(soil_df, select = -c(Class,BlueTarp))
+soil_df=as_tibble(melt(soil_df))
+
+rooftop_df = data[data$Class=="Rooftop",]
+rooftop_df=subset(rooftop_df, select = -c(Class,BlueTarp))
+rooftop_df=as_tibble(melt(rooftop_df))
+
+bluetarp_df = data[data$Class=="Blue Tarp",]
+bluetarp_df=subset(bluetarp_df, select = -c(Class,BlueTarp))
+bluetarp_df=as_tibble(melt(bluetarp_df))
+
+
+
+veg_dist <- ggplot(data=vegetation_df, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
+  ggtitle("Vegetation")
+
+veg_dist
+
+soil_dist <- ggplot(data=soil_df, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
+  ggtitle("Soil")
+soil_dist
+
+rooftop_dist <- ggplot(data=rooftop_df, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
+  ggtitle("Rooftop")
+rooftop_dist
+
+bluetarp_dist <- ggplot(data=bluetarp_df, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
+  ggtitle("Blue Tarp")
+bluetarp_dist
+
+```
+
+
+
+
+
+Next we will sample smaller datasizes from Soil and Vegetation
+
+```{r}
+
+
+vegsub.rows = sample(rownames(vegetation_df), dim(vegetation_df)[1]*0.3)
+vegsub = vegetation_df[vegsub.rows, ]
+
+
+vegsub_dist <- ggplot(data=vegsub, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
+  ggtitle("Vegetation subset")
+
+vegsub_dist
+
+
+soilsub.rows = sample(rownames(soil_df), dim(soil_df)[1]*0.3)
+soilsub = soil_df[vegsub.rows, ]
+
+
+soilsub_dist <- ggplot(data=soilsub, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
+  ggtitle("Soil subset")
+
+soilsub_dist
+
+
+
+
+
+
+
+```
+
+
+
+## Create reduced dataframe
+
+```{r}
+
+#subset dataframes and then merge into new dataframe for testing
+vegetation_df = data[data$Class=="Vegetation",]
+vegsub.rows = sample(rownames(vegetation_df), dim(vegetation_df)[1]*0.2)
+vegsub = vegetation_df[vegsub.rows, ]
+
+soil_df = data[data$Class=="Soil",]
+soilsub.rows = sample(rownames(soil_df), dim(soil_df)[1]*0.1)
+soilsub = soil_df[soilsub.rows, ]
+
+
+rooftop_df = data[data$Class=="Rooftop",]
+roof_sub.rows = sample(rownames(rooftop_df), dim(rooftop_df)[1]*0.25)
+roof_sub = rooftop_df[roof_sub.rows, ]
+
+#other dataframes
+nontarp_sub = data[data$Class=="Various Non-Tarp",]
+bluetarp_sub = data[data$Class=="Blue Tarp",]
+
+
+df = bind_rows(vegsub, soilsub, roof_sub, nontarp_sub, bluetarp_sub,id = NULL) 
+
+
+sub_pareto_df <- df %>%
+  count(Class, sort = TRUE) 
+sub_pareto_df
+
+
+ggplot(sub_pareto_df, aes(x=reorder(Class,-n), y=n)) + 
+  geom_bar(stat = "identity") + 
+  labs(x="Class", y="Count")
+
+df=subset(df, select = -c(Class))
+
+plot(df)
+
+```
 
 
 
@@ -270,46 +400,6 @@ ldaFit = caret::train(BlueTarp ~ ., data=train,
                  method='lda', 
                  trControl=trControl)
 
-summary(ldaFit)
-
-#predict values and establish levels
-#lda_pred = predict(ldaFit, newdata=X.test)$posterior[,'1']#, type="raw")
-
-#levels(lda_pred) = c('yes','no')
-
-
-#lda_pred <- predict(ldaFit, X.test) %>% purrr::map(as_tibble) %>% 
- # purrr::map(rownames_to_column) %>% purrr::reduce(left_join, by='rowname') %>%
-#  rename(prediction=value, posterior_Down=Down, posterior_Up=Up)
-
-
-
-#confusionMatrix(lda_pred, cm_truth)
-
-#table(lda_pred,cm_truth)
-
-#summary(lda_pred)
-
-
-
-#ldaFit$pred
-
-#lda_pred
-#cm_truth
-#rocplot(lda_pred, cm_truth, main ="Training Data ")
-
-#roc(cm_truth,lda_pred,plot=TRUE)
-
-#roc.perf = prediction(lda_pred,cm_truth)
-#plot(roc.perf)
-#abline(a=0, b= 1)
-
-```
-
-
-```{r}
-
-
 
 lda_pred = predict(ldaFit, newdata=X.test, type="prob")
 lda_pred
@@ -318,8 +408,10 @@ rocplot(lda_pred[2], cm_truth, main ="Training Data ")
 
 lda_perf = performance(prediction(lda_pred[2],cm_truth),"tpr","fpr")
 
-
 ```
+
+
+
 
 
 
