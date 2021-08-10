@@ -316,7 +316,7 @@ library(pROC)
 library(purrr)
 library(yardstick)
 library(ROCR)
-library(MASS)
+#library(MASS)
 library(randomForest)
 library(xgboost)
 library(Matrix)
@@ -343,6 +343,79 @@ cm_truth = as.factor(test$BlueTarp)
 #levels(cm_truth) = c('yes','no')
 
 ```
+
+
+
+
+## Build Hold-out Datasets
+
+```{r hold_out}
+
+non_bluetarp057 = read_delim("orthovnir057_ROI_NON_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+non_bluetarp057 = non_bluetarp057 %>%
+  dplyr::select(R,G,B) %>%
+  add_column(BlueTarp = "no") 
+
+bluetarp067 = read_delim("orthovnir067_ROI_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+bluetarp067 = bluetarp067 %>%
+  dplyr::select(R,G,B) %>%
+  add_column(BlueTarp = "yes") 
+
+non_bluetarp067 = read_delim("orthovnir067_ROI_NOT_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+non_bluetarp067 = non_bluetarp067 %>%
+  dplyr::select(R,G,B) %>%
+  add_column(BlueTarp = "no") 
+
+bluetarp069 = read_delim("orthovnir069_ROI_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+bluetarp069 = bluetarp069 %>%
+  dplyr::select(R,G,B) %>%
+  add_column(BlueTarp = "yes") 
+
+non_bluetarp069 = read_delim("orthovnir069_ROI_NOT_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+non_bluetarp069 = non_bluetarp069 %>%
+  dplyr::select(R,G,B) %>%
+  add_column(BlueTarp = "no") 
+
+bluetarp078 = read_delim("orthovnir078_ROI_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+bluetarp078 = bluetarp078 %>%
+  dplyr::select(R,G,B) %>%
+  add_column(BlueTarp = "yes") 
+
+non_bluetarp078 = read_delim("orthovnir078_ROI_NON_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+non_bluetarp078 = non_bluetarp078 %>%
+  dplyr::select(R,G,B) %>%
+  add_column(BlueTarp = "no") 
+
+#assemble holdout df
+holdout_df = bind_rows(non_bluetarp057, bluetarp067, non_bluetarp067, bluetarp069, non_bluetarp069,bluetarp078,non_bluetarp078,id = NULL)
+
+#convert to numeric
+holdout_df$R = as.numeric(holdout_df$R) 
+holdout_df$G = as.numeric(holdout_df$G) 
+holdout_df$B = as.numeric(holdout_df$B) 
+holdout_df
+
+
+#pareto
+ho_pareto_df <- bluetarp078 %>%
+  count(BlueTarp, sort = TRUE) 
+ho_pareto_df
+
+
+ggplot(ho_pareto_df, aes(x=reorder(BlueTarp,-n), y=n)) + 
+  geom_bar(stat = "identity") + 
+  labs(x="Class", y="Count")
+
+
+
+
+
+
+
+#look at empty rows heatmap?
+```
+
+
 
 
 
@@ -631,7 +704,7 @@ svm_perf = performance(prediction(svm_pred[2],cm_truth),"tpr","fpr")
 
 
 
-```{r}
+```{r roc_curve_assembly}
 
 
 
