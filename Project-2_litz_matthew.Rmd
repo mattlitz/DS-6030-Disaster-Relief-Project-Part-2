@@ -442,6 +442,7 @@ logitFit
 #predict values and eastablish levels
 logit_pred = predict(logitFit, X.test, type="prob")
 #levels(logit_pred) = c('yes','no')
+names(logit_pred)
 
 #confusionMatrix(logit_pred, cm_truth)
 rocplot = function(pred,truth,...){
@@ -473,9 +474,9 @@ ldaFit = caret::train(BlueTarp ~ ., data=train,
                  method='lda', 
                  trControl=trControl)
 
-
+ldaFit
 lda_pred = predict(ldaFit, newdata=X.test, type="prob")
-lda_pred
+
 
 rocplot(lda_pred[2], cm_truth, main ="Training Data ")
 
@@ -485,6 +486,27 @@ lda_perf = performance(prediction(lda_pred[2],cm_truth),"tpr","fpr")
 
 
 
+
+
+```{r lda_base}
+
+library(MASS)
+lda.fit = lda(BlueTarp~., data = train)
+lda.fit
+
+lda.pred = predict(lda.fit,X.test)
+names(lda.pred)
+
+table(lda.pred$class, test$BlueTarp)
+
+accuracy = (5648+663)/(5648+663+138+151)
+accuracy
+
+rocplot(lda.pred$posterior[,2], cm_truth, main ="Training Data ")
+
+
+
+```
 
 
 
@@ -559,6 +581,23 @@ knn_perf = performance(prediction(knn_pred[2],cm_truth),"tpr","fpr")
 ```
 
 
+
+
+```{r knn_base}
+library(class)
+knn.pred = knn( train .X , test .X , train . Direction , k =1)
+
+
+
+
+```
+
+
+
+
+
+
+
 ## Penalized Logistic Regression (PLR)
 
 The final model applied was PLR.  This model utilizes the glmnet model with ridge regression.  The turning parameter that provides the best performance was 0.003981072.	
@@ -620,60 +659,91 @@ plot(ths$prob_threshold, ths$Accuracy)
 ### Random Forests with XGB 
 The objective "binary:logistic logistic" was utilized for this classification problem.
 
-
+hyperparameters?
 
 ```{r random_forests, echo=TRUE}
 
 
 #train and test matrices
-trainm <- sparse.model.matrix(BlueTarp ~.-1,data=train)
-train_label <- train$BlueTarp
-train_matrix <- xgb.DMatrix(data = as.matrix(trainm),label = train_label)
+trainm = sparse.model.matrix(BlueTarp ~.-1,data=train)
+train_label = as.numeric(as.factor(train$BlueTarp))-1
+train_matrix = xgb.DMatrix(data = as.matrix(trainm),label = train_label)
 
-testm <- sparse.model.matrix(BlueTarp ~.-1,data=test)
-test_label <- test$BlueTarp
-test_matrix <- xgb.DMatrix(data = as.matrix(testm),label = test_label)
+testm = sparse.model.matrix(BlueTarp ~.-1,data=test)
+test_label = as.numeric(as.factor(test$BlueTarp))-1
+test_matrix = xgb.DMatrix(data = as.matrix(testm),label = test_label)
 
 #Parameters
-#nc <- length(unique(train_label))
-xgb_params <- list("objective" = "binary:logistic",
-                    "eval_metric" = "mlogloss",
-      #              "num_class" = nc,
+nc = length(unique(train_label))
+xgb_params = list("objective" = "multi:softprob",
+                    "eval_metric" = "auc", #mlogloss
+                    "num_class" = 2,
                     "learning_rate" = 0.01, #shrinkage
                     "num_parallel_tree"=1000)
 
-#watchlist <- list(train = train_matrix, test = test_matrix)
+watchlist <- list(train = train_matrix, test = test_matrix)
 
 #xgb model
-#bst_model <- xgb.train(params = xgb_params,
-#                       data=train_matrix,
-#                       nrounds = 100,
-#                       watchlist = watchlist)
+bst_model <- xgb.train(params = xgb_params,
+                       data=train_matrix,
+                       nrounds = 10,
+                       watchlist = watchlist)
 
 
 
-#cv
-#xgb_cv = cv(dtrain=data_dmatrix, params=params, nfold=3,
-#                    num_boost_round=50, early_stopping_rounds=10, metrics="auc", as_pandas=True, seed=123)
 
 
 
 #from docs api
-cv = xgb.cv(params = xgb_params, data = train_matrix, nrounds = 100, nthread = 2, nfold = 10, metrics = list("rmse","auc"),
-                  max_depth = 3, eta = 0.1)
-print(cv)
-print(cv, verbose=TRUE)
+#cv = xgb.cv(params = xgb_params, data = train_matrix, nrounds = 100, nthread = 2, nfold = 10)
+#print(cv)
+#print(cv, verbose=TRUE)
 
 
 ```
 
 
 
+```{r xgbcv}
+#train and test matrices
+trainm = sparse.model.matrix(BlueTarp ~.-1,data=train)
+train_label = as.numeric(as.factor(train$BlueTarp))-1
+train_matrix = xgb.DMatrix(data = as.matrix(trainm),label = train_label)
+
+testm = sparse.model.matrix(BlueTarp ~.-1,data=test)
+test_label = as.numeric(as.factor(test$BlueTarp))-1
+test_matrix = xgb.DMatrix(data = as.matrix(testm),label = test_label)
+
+xgb_params = list("objective" = "multi:softprob",
+                    "eval_metric" = "auc", #mlogloss
+                    "num_class" = 2,
+                    "learning_rate" = 0.01, #shrinkage
+                    "num_parallel_tree"=1000)
+
+#from docs api
+cv = xgb.cv(params = xgb_params, data = train_matrix, nrounds = 10, nthread = 2, nfold = 10)
+print(cv)
+print(cv, verbose=TRUE)
+
+
+#xgb is used to find parameters and then we xgb.train
+
+
+```
+
+
+```{r cv importance}
+importance = xgb.importance(feature_names = colnames(train_matrix), model = cv)
+head(importance)
+xgb.plot.importance(importance)
+```
+
+
 
 
 ### Support Vector Machines (SVM)
 Scaling was implemented on this data set
-
+look at kernel values
 
 ```{r svm, echo=TRUE}
 
@@ -684,7 +754,7 @@ trControl = caret::trainControl(method="cv", number=10,
                                      allowParallel=TRUE)
 
 svmFit = caret::train(BlueTarp ~ ., data=train, 
-                 method='svmLinear',
+                 method='svmPoly', #svmRadial,svmPoly, svmLinear
                  preProcess = c("center", "scale"),
                  trControl=trControl)
 
