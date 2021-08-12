@@ -175,6 +175,7 @@ Will it affect blue classification?
 
 need to split to maintain distributions
 
+add facet
 
 ```{r}
 library(reshape2)
@@ -260,7 +261,7 @@ soilsub_dist
 
 #subset dataframes and then merge into new dataframe for testing
 vegetation_df = data[data$Class=="Vegetation",]
-vegsub.rows = sample(rownames(vegetation_df), dim(vegetation_df)[1]*0.2)
+vegsub.rows = sample(rownames(vegetation_df), dim(vegetation_df)[1]*0.1)
 vegsub = vegetation_df[vegsub.rows, ]
 
 soil_df = data[data$Class=="Soil",]
@@ -272,8 +273,14 @@ rooftop_df = data[data$Class=="Rooftop",]
 roof_sub.rows = sample(rownames(rooftop_df), dim(rooftop_df)[1]*0.25)
 roof_sub = rooftop_df[roof_sub.rows, ]
 
+nontarp_df = data[data$Class=="Various Non-Tarp",]
+nontarp_sub.rows = sample(rownames(nontarp_df), dim(nontarp_df)[1]*0.5)
+nontarp_sub = nontarp_df[nontarp_sub.rows, ]
+
+
+
 #other dataframes
-nontarp_sub = data[data$Class=="Various Non-Tarp",]
+#nontarp_sub = data[data$Class=="Various Non-Tarp",]
 bluetarp_sub = data[data$Class=="Blue Tarp",]
 
 
@@ -316,7 +323,6 @@ library(pROC)
 library(purrr)
 library(yardstick)
 library(ROCR)
-#library(MASS)
 library(randomForest)
 library(xgboost)
 library(Matrix)
@@ -440,11 +446,17 @@ logitFit = train(fmla, data=train,
 logitFit
 
 #predict values and eastablish levels
+logit_pred_plain = predict(logitFit, X.test)
 logit_pred = predict(logitFit, X.test, type="prob")
+logit_pred_raw = predict(logitFit, X.test, type="raw")
 #levels(logit_pred) = c('yes','no')
-names(logit_pred)
 
-#confusionMatrix(logit_pred, cm_truth)
+
+
+confusionMatrix(logit_pred_plain, cm_truth)
+
+table(logit_pred_plain, test$BlueTarp)
+
 rocplot = function(pred,truth,...){
 predob = prediction(pred,truth)
 perf = performance(predob,"tpr","fpr")
@@ -455,6 +467,9 @@ rocplot(logit_pred[2], cm_truth, main ="Training Data")
 
 log_perf = performance(prediction(logit_pred[2],cm_truth),"tpr","fpr")
 
+#print to csv to test
+#test_accuracy= data.frame(logit_pred_raw,cm_truth)
+#write.csv(test_accuracy,"logit_pred_verification.csv", row.names = FALSE)
 ```
 
 
@@ -534,6 +549,8 @@ trControl = caret::trainControl(method="cv", number=10,
                                      classProbs = TRUE,
                                      allowParallel=TRUE)
 
+#tuneGrid = expand.grid(lambda=lambdas, alpha=0)
+
 qdaFit = caret::train(BlueTarp ~ ., data=train, 
                  method='qda', 
                  trControl=trControl)
@@ -554,7 +571,14 @@ qda_perf = performance(prediction(qda_pred[2],cm_truth),"tpr","fpr")
 ## K-Nearest Neighbors (KNN) results
 The ideal tuning parameter for kNN was automatically calculated through the caret package as k=7.
 
+The parameters available for tuning
+
+
 ```{r knn, echo=TRUE}
+
+
+#ctrl <- trainControl(method="repeatedcv",repeats = 3) #,classProbs=TRUE,summaryFunction = twoClassSummary)
+#knnFit <- train(Direction ~ ., data = training, method = "knn", trControl = ctrl, preProcess = c("center","scale"), tuneLength = 20)
 
 trControl = caret::trainControl(method="cv", number=10,
                                      savePredictions=TRUE,
@@ -564,7 +588,8 @@ trControl = caret::trainControl(method="cv", number=10,
 knnFit = caret::train(BlueTarp ~ ., data=train, 
                  method='knn',
                  preProcess = c("center", "scale"),
-                 trControl=trControl)
+                 trControl=trControl,
+                 tuneLength = 20)
 
 knnFit
 
@@ -578,6 +603,9 @@ rocplot(knn_pred[2], cm_truth, main ="Training Data ")
 
 knn_perf = performance(prediction(knn_pred[2],cm_truth),"tpr","fpr")
 
+```
+```{r}
+plot(knnFit)
 ```
 
 
@@ -612,14 +640,13 @@ trControl = caret::trainControl(method='cv',
                                 classProbs=TRUE,     
                                 allowParallel=TRUE)
 
-tuneGrid = expand.grid(lambda=lambdas, alpha=0)
 
 plrFit = caret::train(fmla, data=train,
                  method='glmnet',
                  family='binomial', 
                  thresh=0.74,       
                  trControl=trControl,
-                 tuneGrid=tuneGrid)
+                 tuneGrid=expand.grid(lambda=lambdas, alpha=0))
 plrFit
 
 #best tuning parameter
@@ -656,7 +683,46 @@ plot(ths$prob_threshold, ths$Accuracy)
 
 
 
-### Random Forests with XGB 
+
+### Random Forests 
+
+mtry (only 2 values) and ntrees pa
+
+```{r random_forests, echo=TRUE}
+
+set.seed(1)
+#rf.boston=randomForest(medv~.,data=Boston,subset=train,mtry=6,importance=TRUE)
+modellist <- list()
+trControl=caret::trainControl("cv", 
+                              number=10,
+                              savePredictions=TRUE,
+                              returnResamp='all')
+for (ntree in c(100,200,500,1000)){
+rf_fit = caret::train(BlueTarp~., data=train, 
+                         method='rf', 
+                         ntree=ntree,
+                         importance=TRUE, 
+                         tuneGrid=data.frame(mtry=3),
+                         trControl=trControl)
+key = toString(ntree)
+  modellist[[key]] <- rf_fit
+}
+
+
+results = resamples(modellist)
+summary(results)
+
+
+
+#yhat.rf = predict(rf.boston,newdata=Boston[-train,])
+#mean((yhat.rf-boston.test)^2)
+rf.caret
+
+
+
+```
+
+### XGBoost 
 The objective "binary:logistic logistic" was utilized for this classification problem.
 
 hyperparameters?
@@ -676,7 +742,7 @@ test_matrix = xgb.DMatrix(data = as.matrix(testm),label = test_label)
 #Parameters
 nc = length(unique(train_label))
 xgb_params = list("objective" = "multi:softprob",
-                    "eval_metric" = "auc", #mlogloss
+                    "eval_metric" = "mlogloss",
                     "num_class" = 2,
                     "learning_rate" = 0.01, #shrinkage
                     "num_parallel_tree"=1000)
@@ -702,7 +768,8 @@ bst_model <- xgb.train(params = xgb_params,
 
 ```
 
-
+#XGBoost parameter tuning
+find best number of roundsnrounds
 
 ```{r xgbcv}
 #train and test matrices
@@ -715,48 +782,55 @@ test_label = as.numeric(as.factor(test$BlueTarp))-1
 test_matrix = xgb.DMatrix(data = as.matrix(testm),label = test_label)
 
 xgb_params = list("objective" = "multi:softprob",
-                    "eval_metric" = "auc", #mlogloss
+                    "eval_metric" = "auc",
                     "num_class" = 2,
                     "learning_rate" = 0.01, #shrinkage
                     "num_parallel_tree"=1000)
 
-#from docs api
-cv = xgb.cv(params = xgb_params, data = train_matrix, nrounds = 10, nthread = 2, nfold = 10)
+cv = xgb.cv(params = xgb_params, 
+            data = train_matrix, 
+            nrounds = 100, 
+            nthread = 2, 
+            nfold = 10,
+            early_stopping_rounds = 5,
+            maximize = TRUE,
+            showsd = TRUE)
 print(cv)
 print(cv, verbose=TRUE)
 
-
-#xgb is used to find parameters and then we xgb.train
-
-
 ```
 
 
-```{r cv importance}
-importance = xgb.importance(feature_names = colnames(train_matrix), model = cv)
-head(importance)
-xgb.plot.importance(importance)
-```
 
 
 
 
 ### Support Vector Machines (SVM)
 Scaling was implemented on this data set
-look at kernel values
+tuneGrid?
+use cache
+
+The cost function was tuned in this analysis
+
 
 ```{r svm, echo=TRUE}
 
 
+#ranges = list ( cost = c(0.001, 0.01,0.1,1,5,10,100)
+                
+                
 trControl = caret::trainControl(method="cv", number=10,
                                      savePredictions=TRUE,
                                      classProbs = TRUE,
                                      allowParallel=TRUE)
 
+
+
 svmFit = caret::train(BlueTarp ~ ., data=train, 
-                 method='svmPoly', #svmRadial,svmPoly, svmLinear
+                 method='svmLinear', #svmRadial #svmPoly
                  preProcess = c("center", "scale"),
-                 trControl=trControl)
+                 trControl=trControl)#,
+                 #tuneGrid = expand.grid(C=c(0.001, 0.01,0.1,1,5,10,100)))
 
 svmFit
 
@@ -865,6 +939,7 @@ The following table presents a table of key metrics collected during this analys
 |  KNN  	| N/A  	| 0.5571301  	|  N/A 	|  0.9977 	| 0.9985  	|0.0282   	| 0.9991  	| 
 |  Penalized Log Reg 	| 0.003981072  	| 1.0000000  	|  0.74 	|  0.9757 	| 1  	| 0.7875  	|  0.9755 	|  
 |  Random Forests 	| -  	| -  	|  - 	|  - 	| -  	| -  	|  - 	|  
+|  XGBoost 	| -  	| - 	|  - 	|  - 	| -  	| -  	|  - 	|  
 |  SVM 	| -  	| - 	|  - 	|  - 	| -  	| -  	|  - 	|  
 
 
