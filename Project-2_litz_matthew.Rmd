@@ -112,12 +112,32 @@ Penalized ridge logistic regression
 
 
 
+Notes from my grade
+
+EDA
+        you can also try scatter plot to see the cluster of data
+    Model training
+        set-up
+            Don't hide the code
+        You need to explain what you are doing, how you do this, rather than just put the code here
+        KNN
+            why only 5, 7, 9? did you try other values? 
+        threshold
+            what about the threshold of logistic regression, LDA, QDA?
+        ROC curves
+            the ROC curves seems not very correct. the accuracy of your model are very high, the ROC curve should not be poor like this
+        Conclusion
+            need at least 3 conclusions.
+
+
+
 
 ```{r load-packages}
 # Load Required Packages
 library(tidyverse)
 library(readr)
 library(GGally)
+library(gridExtra)
 
 data = read_csv('HaitiPixels.csv')
 attach(data)
@@ -130,24 +150,35 @@ data = data %>%
 
 
 
-
-ggplot(data, aes(x=factor(Class), y=Blue)) + 
+par(mfrow=c(3,1))
+bp_blue = ggplot(data, aes(x=factor(Class), y=Blue)) + 
   geom_boxplot(fill="blue", color="black") + 
   labs(x="Class", y="Blue")
 
-ggplot(data, aes(x=factor(Class), y=Red)) + 
+bp_red = ggplot(data, aes(x=factor(Class), y=Red)) + 
   geom_boxplot(fill="red", color="black") + 
   labs(x="Class", y="Red")
 
-ggplot(data, aes(x=factor(Class), y=Green)) + 
+bp_gr = ggplot(data, aes(x=factor(Class), y=Green)) + 
   geom_boxplot(fill="green", color="black") + 
   labs(x="Class", y="Green")
+
+
+require(gridExtra)
+grid.arrange(bp_blue, bp_red, bp_gr, ncol=2)
+
+
 
 
 #remove classification variables
 df=subset(data, select = -c(Class))
 
 ```
+
+## PAreto and PCA
+
+The reduced dataset allows us tp
+PCA provides a tool to do just this. It finds a low-dimensional representation of a data set that contains as much as possible of the variation.
 
 ```{r}
 pareto_df <- data %>%
@@ -158,6 +189,31 @@ pareto_df
 ggplot(pareto_df, aes(x=reorder(Class,-n), y=n)) + 
   geom_bar(stat = "identity") + 
   labs(x="Class", y="Count")
+
+
+class_df = subset(data, select = -c(BlueTarp))
+num_df = subset(data, select = -c(BlueTarp,Class))
+
+#pca
+pr.out = prcomp(num_df, scale=TRUE)
+biplot(pr.out, scale =0)
+summary(pr.out)
+plot(pr.out)
+
+
+
+df_pca = data.frame(
+  PCA1 = pr.out$x[, 1],
+  PCA2 = pr.out$x[, 2],
+  label = data$Class,
+  colour = Cols(data$Class)
+)
+
+ggplot(df_pca, aes(x=PCA1, y=PCA2, color=label)) +
+  geom_point()
+
+
+
 
 ```
 
@@ -197,23 +253,26 @@ bluetarp_df=subset(bluetarp_df, select = -c(Class,BlueTarp))
 bluetarp_df=as_tibble(melt(bluetarp_df))
 
 
-
+par(mfrow=c(2,2))
 veg_dist <- ggplot(data=vegetation_df, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
   ggtitle("Vegetation")
 
-veg_dist
 
-soil_dist <- ggplot(data=soil_df, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
+
+soil_dist = ggplot(data=soil_df, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
   ggtitle("Soil")
-soil_dist
 
-rooftop_dist <- ggplot(data=rooftop_df, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
+
+rooftop_dist = ggplot(data=rooftop_df, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
   ggtitle("Rooftop")
-rooftop_dist
 
-bluetarp_dist <- ggplot(data=bluetarp_df, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
+
+bluetarp_dist = ggplot(data=bluetarp_df, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
   ggtitle("Blue Tarp")
-bluetarp_dist
+
+
+
+grid.arrange(veg_dist, soil_dist, rooftop_dist,bluetarp_dist, ncol=2)
 
 ```
 
@@ -233,7 +292,7 @@ vegsub = vegetation_df[vegsub.rows, ]
 vegsub_dist <- ggplot(data=vegsub, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
   ggtitle("Vegetation subset")
 
-vegsub_dist
+
 
 
 soilsub.rows = sample(rownames(soil_df), dim(soil_df)[1]*0.3)
@@ -243,9 +302,9 @@ soilsub = soil_df[vegsub.rows, ]
 soilsub_dist <- ggplot(data=soilsub, aes(x=value, group=variable, fill=variable)) + geom_density(adjust=1.5, alpha=.4) + 
   ggtitle("Soil subset")
 
-soilsub_dist
 
 
+grid.arrange(vegsub_dist, soilsub_dist, ncol=2)
 
 
 
@@ -256,7 +315,7 @@ soilsub_dist
 
 
 ## Create reduced dataframe
-
+The data is imbalanced
 ```{r}
 
 #subset dataframes and then merge into new dataframe for testing
@@ -296,12 +355,15 @@ ggplot(sub_pareto_df, aes(x=reorder(Class,-n), y=n)) +
   geom_bar(stat = "identity") + 
   labs(x="Class", y="Count")
 
+
+
 df=subset(df, select = -c(Class))
 
-plot(df)
+
+
+
 
 ```
-
 
 
 
@@ -335,8 +397,18 @@ library(kernlab)
 #Create training and test splits
 train.rows = sample(rownames(df), dim(df)[1]*0.6)
 train = df[train.rows, ]
+
+
+
+#train$BlueTarp <- factor(train$BlueTarp, levels = c("yes", "no"))
+#levels(train$BlueTarp)
+train$BlueTarp = as.factor(train$BlueTarp)
+#levels(train$BlueTarp)=c(0,1)
+write.csv(train,"train.csv", row.names = FALSE)
+
 test = df[setdiff(rownames(df), train.rows), ]
 c(dim(train)[1], dim(test)[1])
+test$BlueTarp = as.factor(test$BlueTarp)
 
 #formula used throughout
 fmla = as.formula(BlueTarp~.)
@@ -347,58 +419,60 @@ X.test = hardhat::mold(fmla, data=test)$predictors
 #define factors for Y.test
 cm_truth = as.factor(test$BlueTarp)
 #levels(cm_truth) = c('yes','no')
-
+write.csv(cm_truth,"cm_truth.csv", row.names = FALSE)
 ```
 
 
 
 
 ## Build Hold-out Datasets
+NOTE: The file "orthovnir067_ROI_Blue_Tarps_data.txt" was omitted from the hold out set since it was a copy of the  
 
 ```{r hold_out}
 
-non_bluetarp057 = read_delim("orthovnir057_ROI_NON_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+non_bluetarp057 = read_delim("orthovnir057_ROI_NON_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","Red","Green","Blue"))
 non_bluetarp057 = non_bluetarp057 %>%
-  dplyr::select(R,G,B) %>%
-  add_column(BlueTarp = "no") 
+  dplyr::select(Red,Green,Blue) %>%
+  add_column(BlueTarp = "no") %>%
+  rename(R = Red) #%>%
 
-bluetarp067 = read_delim("orthovnir067_ROI_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+bluetarp067 = read_delim("orthovnir067_ROI_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","Red","Green","Blue"))
 bluetarp067 = bluetarp067 %>%
-  dplyr::select(R,G,B) %>%
+  dplyr::select(Red,Green,Blue) %>%
   add_column(BlueTarp = "yes") 
 
-non_bluetarp067 = read_delim("orthovnir067_ROI_NOT_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+non_bluetarp067 = read_delim("orthovnir067_ROI_NOT_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","Red","Green","Blue"))
 non_bluetarp067 = non_bluetarp067 %>%
-  dplyr::select(R,G,B) %>%
+  dplyr::select(Red,Green,Blue) %>%
   add_column(BlueTarp = "no") 
 
-bluetarp069 = read_delim("orthovnir069_ROI_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+bluetarp069 = read_delim("orthovnir069_ROI_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","Red","Green","Blue"))
 bluetarp069 = bluetarp069 %>%
-  dplyr::select(R,G,B) %>%
+  dplyr::select(Red,Green,Blue) %>%
   add_column(BlueTarp = "yes") 
 
-non_bluetarp069 = read_delim("orthovnir069_ROI_NOT_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+non_bluetarp069 = read_delim("orthovnir069_ROI_NOT_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","Red","Green","Blue"))
 non_bluetarp069 = non_bluetarp069 %>%
-  dplyr::select(R,G,B) %>%
+  dplyr::select(Red,Green,Blue) %>%
   add_column(BlueTarp = "no") 
 
-bluetarp078 = read_delim("orthovnir078_ROI_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+bluetarp078 = read_delim("orthovnir078_ROI_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","Red","Green","Blue"))
 bluetarp078 = bluetarp078 %>%
-  dplyr::select(R,G,B) %>%
+  dplyr::select(Red,Green,Blue) %>%
   add_column(BlueTarp = "yes") 
 
-non_bluetarp078 = read_delim("orthovnir078_ROI_NON_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","R","G","B"))
+non_bluetarp078 = read_delim("orthovnir078_ROI_NON_Blue_Tarps.txt", delim=" ", skip=8,col_names=c("ID","X","Y","MapX","MapY","Lat","Lon","Red","Green","Blue"))
 non_bluetarp078 = non_bluetarp078 %>%
-  dplyr::select(R,G,B) %>%
+  dplyr::select(Red,Green,Blue) %>%
   add_column(BlueTarp = "no") 
 
 #assemble holdout df
 holdout_df = bind_rows(non_bluetarp057, bluetarp067, non_bluetarp067, bluetarp069, non_bluetarp069,bluetarp078,non_bluetarp078,id = NULL)
 
 #convert to numeric
-holdout_df$R = as.numeric(holdout_df$R) 
-holdout_df$G = as.numeric(holdout_df$G) 
-holdout_df$B = as.numeric(holdout_df$B) 
+holdout_df$Red = as.numeric(holdout_df$Red) 
+holdout_df$Green = as.numeric(holdout_df$Green) 
+holdout_df$Blue = as.numeric(holdout_df$Blue) 
 holdout_df
 
 
@@ -446,31 +520,28 @@ logitFit = train(fmla, data=train,
 logitFit
 
 #predict values and eastablish levels
-logit_pred_plain = predict(logitFit, X.test)
 logit_pred = predict(logitFit, X.test, type="prob")
 logit_pred_raw = predict(logitFit, X.test, type="raw")
 #levels(logit_pred) = c('yes','no')
 
 
 
-confusionMatrix(logit_pred_plain, cm_truth)
+confusionMatrix(logit_pred_raw, cm_truth)
 
 table(logit_pred_plain, test$BlueTarp)
 
-rocplot = function(pred,truth,...){
-predob = prediction(pred,truth)
-perf = performance(predob,"tpr","fpr")
-plot(perf)
-}
+logit_roc = roc(response=cm_truth,
+            predictor=logit_pred$yes,
+            plot=TRUE,
+            col='red',
+            lwd=4,
+            print.auc=TRUE)
 
-rocplot(logit_pred[2], cm_truth, main ="Training Data")
 
-log_perf = performance(prediction(logit_pred[2],cm_truth),"tpr","fpr")
-
-#print to csv to test
-#test_accuracy= data.frame(logit_pred_raw,cm_truth)
-#write.csv(test_accuracy,"logit_pred_verification.csv", row.names = FALSE)
 ```
+
+
+
 
 
 
@@ -491,48 +562,23 @@ ldaFit = caret::train(BlueTarp ~ ., data=train,
 
 ldaFit
 lda_pred = predict(ldaFit, newdata=X.test, type="prob")
-
-
-rocplot(lda_pred[2], cm_truth, main ="Training Data ")
+lda_pred_plain = predict(ldaFit, X.test)
+lda_pred_raw = predict(ldaFit, newdata=X.test, type="raw")
 
 lda_perf = performance(prediction(lda_pred[2],cm_truth),"tpr","fpr")
 
-```
+confusionMatrix(lda_pred_raw, cm_truth)
+table(lda_pred_raw, test$BlueTarp)
 
-
-
-
-
-```{r lda_base}
-
-library(MASS)
-lda.fit = lda(BlueTarp~., data = train)
-lda.fit
-
-lda.pred = predict(lda.fit,X.test)
-names(lda.pred)
-
-table(lda.pred$class, test$BlueTarp)
-
-accuracy = (5648+663)/(5648+663+138+151)
-accuracy
-
-rocplot(lda.pred$posterior[,2], cm_truth, main ="Training Data ")
-
-
+lda_roc = roc(response=cm_truth,
+            predictor=lda_pred$yes,
+            plot=TRUE,
+            col='red',
+            lwd=4,
+            print.auc=TRUE,
+            main ="LDA ROC - Test Data")
 
 ```
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -558,12 +604,36 @@ qdaFit
 
 #predict values and establish levels
 qda_pred = predict(qdaFit, X.test, type="prob")
-#levels(qda_pred) = c('yes','no')
+qda_pred_raw = predict(qdaFit, X.test, type="raw")
 
-#confusionMatrix(qda_pred, cm_truth)
 
-rocplot(qda_pred[2], cm_truth, main ="Training Data ")
-qda_perf = performance(prediction(qda_pred[2],cm_truth),"tpr","fpr")
+confusionMatrix(qda_pred_raw, cm_truth)
+
+qda_roc = roc(response=cm_truth,
+            predictor=qda_pred$yes,
+            plot=TRUE,
+            col='red',
+            lwd=4,
+            print.auc=TRUE,
+            main ="QDA ROC - Test Data")
+
+#Next we will examine if we adjust the threshold if we improve our accuracy
+#threshold analysis
+
+
+qda_pred_01 = ifelse(qda_pred[2] > 0.1, 1, 0)
+table(qda_pred_01, cm_truth)
+
+
+#threshold analysis
+qda_pred_02 = ifelse(qda_pred[2] > 0.2, 1, 0)
+table(qda_pred_02, cm_truth)
+
+
+#threshold analysis
+qda_pred_09 = ifelse(qda_pred[2] > 0.9, 1, 0)
+table(qda_pred_09, cm_truth)
+
 
 ```
 
@@ -580,7 +650,7 @@ The parameters available for tuning
 #ctrl <- trainControl(method="repeatedcv",repeats = 3) #,classProbs=TRUE,summaryFunction = twoClassSummary)
 #knnFit <- train(Direction ~ ., data = training, method = "knn", trControl = ctrl, preProcess = c("center","scale"), tuneLength = 20)
 
-trControl = caret::trainControl(method="cv", number=10,
+trControl = caret::trainControl(method="repeatedcv", number=3,
                                      savePredictions=TRUE,
                                      classProbs = TRUE,
                                      allowParallel=TRUE)
@@ -589,38 +659,34 @@ knnFit = caret::train(BlueTarp ~ ., data=train,
                  method='knn',
                  preProcess = c("center", "scale"),
                  trControl=trControl,
-                 tuneLength = 20)
+                 tuneLength = 40)
 
 knnFit
 
 #predict values and establish levels
 knn_pred = predict(knnFit, X.test, type="prob")
+knn_pred_raw = predict(knnFit, X.test, type="raw")
 #levels(knn_pred) = c('yes','no')
 
-#confusionMatrix(knn_pred, cm_truth)
+confusionMatrix(knn_pred_raw, cm_truth)
 
-rocplot(knn_pred[2], cm_truth, main ="Training Data ")
+knn_roc = roc(response=cm_truth,
+            predictor=knn_pred$yes,
+            plot=TRUE,
+            col='red',
+            lwd=4,
+            print.auc=TRUE,
+            main ="KNN ROC - Test Data")
 
-knn_perf = performance(prediction(knn_pred[2],cm_truth),"tpr","fpr")
-
-```
-```{r}
 plot(knnFit)
 ```
 
 
 
 
-```{r knn_base}
-library(class)
-knn.pred = knn( train .X , test .X , train . Direction , k =1)
-
-
-
-
+```{r}
+modelLookup("lda")
 ```
-
-
 
 
 
@@ -654,12 +720,21 @@ plrFit$bestTune
 
 #predict values and establish levels
 plr_pred = predict(plrFit, X.test, type="prob")
-#levels(plr_pred) = c('yes','no')
+plr_pred_raw = predict(plrFit, X.test, type="raw")
 
-#confusionMatrix(plr_pred, cm_truth)
+confusionMatrix(plr_pred_raw, cm_truth)
 
-rocplot(plr_pred[2], cm_truth, main ="Training Data ")
-plr_perf = performance(prediction(plr_pred[2],cm_truth),"tpr","fpr")
+plr_roc = roc(response=cm_truth,
+            predictor=plr_pred$yes,
+            plot=TRUE,
+            col='red',
+            lwd=4,
+            print.auc=TRUE,
+            main ="PLR ROC - Test Data")
+
+
+
+plot(plrFit)
 
 ```
 
@@ -697,12 +772,12 @@ trControl=caret::trainControl("cv",
                               number=10,
                               savePredictions=TRUE,
                               returnResamp='all')
-for (ntree in c(100,200,500,1000)){
+for (ntree in c(100,200,500,1000,2000)){
 rf_fit = caret::train(BlueTarp~., data=train, 
                          method='rf', 
                          ntree=ntree,
                          importance=TRUE, 
-                         tuneGrid=data.frame(mtry=3),
+                         tuneGrid=expand.grid(mtry = 1:3),
                          trControl=trControl)
 key = toString(ntree)
   modellist[[key]] <- rf_fit
@@ -716,18 +791,57 @@ summary(results)
 
 #yhat.rf = predict(rf.boston,newdata=Boston[-train,])
 #mean((yhat.rf-boston.test)^2)
-rf.caret
-
-
+#rf.caret
 
 ```
+
+
+```{r feat_imp}
+
+modellist$`100`$bestTune
+modellist$`200`$bestTune
+modellist$`500`$bestTune
+modellist$`1000`$bestTune
+modellist$`2000`$bestTune
+
+modellist$`500`$results
+modellist$`1000`$results
+
+acc_100=plot(modellist$`100`)
+acc_200=plot(modellist$`200`)
+acc_500=plot(modellist$`500`)
+acc_1000=plot(modellist$`1000`)
+acc_2000=plot(modellist$`2000`)
+
+grid.arrange(acc_100,acc_200,acc_500, ncol=2)
+grid.arrange(acc_1000,acc_2000, ncol=2)
+
+model1=modellist$`1000`
+rf_pred = predict(modellist$`1000`, X.test, type="prob")
+rf_pred_raw = predict(modellist$`1000`, X.test, type="raw")
+
+#randomForest::importance(modellist[1]$finalModel)
+confusionMatrix(cm_truth,rf_pred_raw)
+
+rf_roc = roc(response=cm_truth,
+            predictor=rf_pred$yes,
+            plot=TRUE,
+            col='red',
+            lwd=4,
+            print.auc=TRUE,
+            main ="Random Forests (ntree=1000) ROC - Test Data")
+
+```
+
+
+
 
 ### XGBoost 
 The objective "binary:logistic logistic" was utilized for this classification problem.
 
 hyperparameters?
 
-```{r random_forests, echo=TRUE}
+```{r xgboost, echo=TRUE}
 
 
 #train and test matrices
@@ -769,7 +883,7 @@ bst_model <- xgb.train(params = xgb_params,
 ```
 
 #XGBoost parameter tuning
-find best number of roundsnrounds
+find best number of rounds (nrounds)
 
 ```{r xgbcv}
 #train and test matrices
@@ -789,18 +903,101 @@ xgb_params = list("objective" = "multi:softprob",
 
 cv = xgb.cv(params = xgb_params, 
             data = train_matrix, 
-            nrounds = 100, 
-            nthread = 2, 
+            nrounds = 10, 
+            nthread = 2,
+            metrics = "auc",
             nfold = 10,
             early_stopping_rounds = 5,
             maximize = TRUE,
-            showsd = TRUE)
+            showsd = TRUE,
+            callbacks = list(cb.cv.predict(save_models=TRUE)))
 print(cv)
 print(cv, verbose=TRUE)
+
+
+
+
+
+
+
+```
+```{r xgb.cv.pred}
+
+#length(cv$pred[2])
+#length(cm_truth)
+#predict values and establish levels
+#knn_pred = predict(knnFit, X.test, type="prob")
+#knn_pred_raw = predict(knnFit, X.test, type="raw")
+#levels(knn_pred) = c('yes','no')
+
+#threshold analysis
+xgb_pred_05 = ifelse(cv$pred[,2] > 0.5, 1, 0)
+table(xgb_pred_05, train$BlueTarp)
+
+#confusionMatrix(xgb_pred_05, train$BlueTarp)
+
+
+rocplot(cv$pred[,2], train$BlueTarp, main ="XGBoost ROC - Test Data ")
+
+#knn_perf = performance(prediction(knn_pred[2],cm_truth),"tpr","fpr")
+#plot(knnFit)
+
+
 
 ```
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Visualizing the SHAP feature contribution to prediction dependencies on feature value.
+
+```{r xgb_shap}
+
+xgb.plot.shap(
+  data,
+  shap_contrib = NULL,
+  features = NULL,
+  top_n = 1,
+  model = NULL,
+  trees = NULL,
+  target_class = NULL,
+  approxcontrib = FALSE,
+  subsample = NULL,
+  n_col = 1,
+  col = rgb(0, 0, 1, 0.2),
+  pch = ".",
+  discrete_n_uniq = 5,
+  discrete_jitter = 0.01,
+  ylab = "SHAP",
+  plot_NA = TRUE,
+  col_NA = rgb(0.7, 0, 1, 0.6),
+  pch_NA = ".",
+  pos_NA = 1.07,
+  plot_loess = TRUE,
+  col_loess = 2,
+  span_loess = 0.5,
+  which = c("1d", "2d"),
+  plot = TRUE,
+  ...
+)
+
+```
 
 
 
@@ -812,39 +1009,249 @@ use cache
 
 The cost function was tuned in this analysis
 
+Cost and gamma tuned for svm
+
+
+Note: Are the ROC curves built from in-sample or out-of-sample data?
 
 ```{r svm, echo=TRUE}
-
+set.seed(123)
 
 #ranges = list ( cost = c(0.001, 0.01,0.1,1,5,10,100)
+
+radialTune = expand.grid(sigma= 2^c(-25, -20, -15,-10, -5, 0), C= c(0.001, 0.01,0.1,1,5,10,100))
+linearTune = expand.grid(C=c(0.001, 0.01,0.1,1,5,10,100))              
                 
-                
-trControl = caret::trainControl(method="cv", number=10,
-                                     savePredictions=TRUE,
-                                     classProbs = TRUE,
-                                     allowParallel=TRUE)
+trControl = caret::trainControl(method="repeatedcv", 
+                                repeats=5,
+                                savePredictions=TRUE,
+                                classProbs = TRUE,
+                                allowParallel=TRUE,
+                                summaryFunction = twoClassSummary)
 
 
 
 svmFit = caret::train(BlueTarp ~ ., data=train, 
-                 method='svmLinear', #svmRadial #svmPoly
+                 method='svmRadial', #svmRadial #svmPoly
                  preProcess = c("center", "scale"),
-                 trControl=trControl)#,
-                 #tuneGrid = expand.grid(C=c(0.001, 0.01,0.1,1,5,10,100)))
+                 metric="ROC",
+                 trControl=trControl,
+                 tuneGrid = radialTune)
 
 svmFit
 
 #predict values and establish levels
-svm_pred = predict(svmFit, X.test, type="prob")
-#levels(knn_pred) = c('yes','no')
+svm_pred = predict(svmFit, X.test, type="prob",drop=FALSE)
+
 
 #confusionMatrix(knn_pred, cm_truth)
 
 rocplot(svm_pred[2], cm_truth, main ="Training Data ")
 svm_perf = performance(prediction(svm_pred[2],cm_truth),"tpr","fpr")
 
+#kernlab::plot(svmFit$finalModel)
 
 ```
+
+
+
+
+
+```{r svm_base r}
+
+set.seed(1)
+
+
+#cross-validation
+tune.out=tune(svm,BlueTarp~.,data=train,kernel="linear",
+              ranges=list(cost=c(0.001, 0.01, 0.1, 1,5,10,100)))
+
+summary(tune.out)
+bestmod=tune.out$best.model
+summary(bestmod)
+
+#cv results
+ypred=predict(bestmod,X.test)
+table(predict=ypred, truth=cm_truth)
+
+#rocplot(ypred, cm_truth, main ="Training Data ")
+#svm_perf = performance(prediction(ypred,cm_truth),"tpr","fpr")
+
+
+```
+
+## SVM ROC Curve
+To produce the ROC curve, the tuned parameters from the CV must be inseerted to obtain the fitted values.
+
+However, it is also possible to obtain fitted values for each observation,
+which are the numerical scores used to obtain the class labels.
+
+However, these ROC curves are all on the training data. We are really
+more interested in the level of prediction accuracy on the test data.
+
+```{r svm_roc_linear}
+
+
+svmfit.opt = svm(BlueTarp~.,data=test, kernel="linear", cost =100, decision.values=T)
+
+fitted = attributes(predict(svmfit.opt,test,decision.values = TRUE))$decision.values*-1
+
+rf_roc = roc(response=cm_truth,
+            predictor=fitted,
+            plot=TRUE,
+            col='red',
+            lwd=4,
+            print.auc=TRUE,
+            main ="SVM (Linear) ROC - Test Data")
+
+plot(tune.out)
+
+```
+
+
+
+
+
+
+
+
+```{r svm_plot}
+
+plot(tune.out$best.model, train, Blue~Green, 
+     slice=list(Red=median(train$Red),
+                Blue=median(train$Blue),
+                Green=median(train$Green)), color.palette = topo.colors)
+
+
+plot(tune.out$best.model, train, Blue~Red, 
+     slice=list(Red=median(train$Red),
+                Blue=median(train$Blue),
+                Green=median(train$Green)), color.palette = topo.colors)
+
+
+```
+
+
+
+
+
+
+```{r svm radial-poly}
+
+#radial basis kernel
+tune.out_rad=tune(svm,BlueTarp~.,data=train, kernel="radial",
+                  ranges=list(cost=c(0.1,1,10,100,1000),gamma=c(0.5,1,2,3,4)))
+summary(tune.out_rad)
+
+bestmod_rad=tune.out_rad$best.model
+summary(bestmod_rad)
+
+#cv results for radial kernel
+ypred_rad=predict(bestmod_rad,X.test)
+table(predict=ypred_rad, truth=cm_truth)
+
+
+
+#polynomial basis kernel
+tune.out_poly=tune(svm,BlueTarp~.,data=train, kernel="polynomial",
+                   ranges=list(cost=c(0.1,1,10,100,1000),d=c(1,2,3,4,5,10)))
+summary(tune.out_poly)
+
+bestmod_poly=tune.out_poly$best.model
+summary(bestmod_poly)
+
+#cv results for polynomial basis kernel
+ypred_poly=predict(bestmod_poly,X.test)
+table(predict=ypred_poly, truth=cm_truth)
+
+```
+
+
+```{r svm_plot}
+
+plot(tune.out_rad$best.model, train, Blue~Red, 
+     slice=list(Red=median(train$Red),
+                Blue=median(train$Blue),
+                Green=median(train$Green)), color.palette = topo.colors)
+
+plot(tune.out_rad$best.model, train, Blue~Green, 
+     slice=list(Red=median(train$Red),
+                Blue=median(train$Blue),
+                Green=median(train$Green)), color.palette = topo.colors)
+
+
+plot(tune.out_poly$best.model, train, Blue~Red, 
+     slice=list(Red=median(train$Red),
+                Blue=median(train$Blue),
+                Green=median(train$Green)), color.palette = topo.colors)
+
+plot(tune.out_poly$best.model, train, Blue~Green, 
+     slice=list(Red=median(train$Red),
+                Blue=median(train$Blue),
+                Green=median(train$Green)), color.palette = topo.colors)
+
+
+```
+
+
+The following values were identified as optimal:
+
+radial
+Cost = 1000
+gamma = 0.5
+
+polynomial
+Cost = 1000
+Degree= 3
+
+
+Error plot are presented of the results of both kernels, with the darkest shades representing the lowest error.
+
+```{r svm_roc_radial_poly}
+
+#radial
+svmfit.opt = svm(BlueTarp~.,data=test, kernel="radial", cost =100, gamma= 0.5, decision.values=T)
+
+fitted_rad = attributes(predict(svmfit.opt,test,decision.values = TRUE))$decision.values*-1
+
+svm_poly_roc = roc(response=cm_truth,
+            predictor=fitted_rad,
+            plot=TRUE,
+            col='red',
+            lwd=1,
+            print.auc=TRUE,
+            main ="SVM (Radial) ROC - Test Data")
+
+plot(tune.out_rad)
+
+rf_pred_raw = predict(modellist$`1000`, X.test, type="raw")
+
+#randomForest::importance(modellist[1]$finalModel)
+confusionMatrix(cm_truth,ypred)
+
+
+#poly
+svmfit.opt = svm(BlueTarp~.,data=test, kernel="polynomial", cost =100, decision.values=T)
+
+fitted_poly = attributes(predict(svmfit.opt,test,decision.values = TRUE))$decision.values*-1
+
+rf_roc = roc(response=cm_truth,
+            predictor=fitted_poly,
+            plot=TRUE,
+            col='red',
+            lwd=3,
+            print.auc=TRUE,
+            main ="SVM (Poly) ROC - Test Data")
+
+plot(tune.out_poly)
+
+```
+
+
+
+
+
+
 
 
 
@@ -871,68 +1278,12 @@ legend(0.8, 0.6, legend=c("Log", "LDA","QDA","KNN","PLR","SVM"),
 
 
 
-
-
-### Old ROC Curves
-The probabilities were calculated and assembled into a tibble for all 5 models.
-
-```{r ROC_data, echo=TRUE}
-
-
-#calculate probabilities
-preds = tibble(
-  logistic = predict(logitFit, X.test, type="prob")[,1],
-  LDA = predict(ldaFit, newdata=X.test, type='prob')[,1],
-  QDA = predict(qdaFit, newdata=X.test, type='prob')[,1],
-  KNN = predict(knnFit, newdata=X.test, type='prob')[,1],
-  PLR = predict(plrFit, newdata=X.test, type='prob')[,1]
-)
-
-#Y data from test data
-Y.test = test$BlueTarp
-
-#Calculate evaluation data by which to determine ROC Curves
-eval_data = preds %>% 
-  mutate(truth = Y.test) %>% 
-  pivot_longer(cols=-truth, names_to="model", values_to="score")  %>% 
-  rowwise() %>%
-  mutate(prob = if_else(truth == "yes", 1-score, score))
-
-```
-
-
-
-Using the probability data, the ROC curves were calculated using the yardstick package.
-
-```{r roc_curves}
-
-outcome_levels = c("no", "yes") 
-eval_data = eval_data %>% 
-  mutate(truth = factor(truth, outcome_levels))
-  
-
-#-- Make ROC curve data
-ROC_data = eval_data %>% 
-  group_by(model) %>% 
-  yardstick::roc_curve(truth,prob) 
-
-#PlotROC curves
-ROC_data %>% ggplot2::autoplot()   
-
-#calculate AUC
-auc = eval_data %>% 
-  group_by(model) %>%
-  yardstick::roc_auc(truth, prob) 
-auc
-
-```
-
 # Results (Cross-Validation)
 The following table presents a table of key metrics collected during this analysis:
 
 
 | Model  	| Tuning  	|  AUROC 	|  Threshold 	|  Accuracy 	| TPR  	| FPR  	| Precision	|
-|---	|---	|---	|---	|---	|---	|---	|---	|
+|---	    |---       	|---	    |---	        |---	        |---    |---	  |---	      |
 |  Log Reg 	| N/A  	| 0.6496648  	|  N/A 	|  0.995 	|  0.9986 	|  0.1165 	|  0.9963 	|  
 |  LDA  	|  N/A 	| 0.7714629  	|  N/A  	| 0.985  	| 0.9907  	|0.1933   	| 0.9983  	| 
 |  QDA 	| N/A  	| 0.6103066  	| N/A  	| 0.9949  	|  0.9996 	| 0.1498  	|  0.9952 	| 
@@ -940,7 +1291,27 @@ The following table presents a table of key metrics collected during this analys
 |  Penalized Log Reg 	| 0.003981072  	| 1.0000000  	|  0.74 	|  0.9757 	| 1  	| 0.7875  	|  0.9755 	|  
 |  Random Forests 	| -  	| -  	|  - 	|  - 	| -  	| -  	|  - 	|  
 |  XGBoost 	| -  	| - 	|  - 	|  - 	| -  	| -  	|  - 	|  
-|  SVM 	| -  	| - 	|  - 	|  - 	| -  	| -  	|  - 	|  
+|  SVM (kernel) 	| -  	| - 	|  - 	|  - 	| -  	| -  	|  - 	|  
+
+
+
+
+
+| kernel             	| training error rate 	| test error rate 	|
+|--------------------	|---------------------	|-----------------	|
+| linear             	| 0.29875             	| 0.3407407       	|
+| optimal linear     	| 0.16125             	| 0.1666667       	|
+| radial             	| 0.16125             	| 0.1666667       	|
+| optimal radial     	| 0.12                	| 0.2333333       	|
+| polynomial         	| 0.16125             	| 0.1666667       	|
+| optimal polynomial 	| 0.15875             	| 0.1925926       	|
+
+
+
+
+
+
+
 
 
 # Conclusions
